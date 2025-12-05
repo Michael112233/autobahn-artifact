@@ -16,6 +16,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::time::{sleep, Duration};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use adversary::attack::attack;
 
 #[cfg(test)]
 #[path = "tests/reliable_sender_tests.rs"]
@@ -73,13 +74,25 @@ impl ReliableSender {
 
     /// Broadcast the message to all specified addresses in a reliable manner. It returns a vector of
     /// cancel handlers ordered as the input `addresses` vector.
+    /// If `from_node_id` and `address_to_node_id` are provided, calls attack before sending to each address.
     pub async fn broadcast(
         &mut self,
         addresses: Vec<SocketAddr>,
         data: Bytes,
+        from_node_id: Option<usize>,
+        address_to_node_id: Option<HashMap<SocketAddr, usize>>,
     ) -> Vec<CancelHandler> {
         let mut handlers = Vec::new();
+        // Extract references outside the loop to avoid moving the value
+        let addr_map_ref = address_to_node_id.as_ref();
         for address in addresses {
+            // Call attack if node IDs are provided
+            if let (Some(from_id), Some(addr_map)) = (from_node_id, addr_map_ref) {
+                if let Some(&to_id) = addr_map.get(&address) {
+                    attack(from_id, to_id).await;
+                }
+            }
+            
             let handler = self.send(address, data.clone()).await;
             handlers.push(handler);
         }
@@ -96,7 +109,7 @@ impl ReliableSender {
     ) -> Vec<CancelHandler> {
         addresses.shuffle(&mut self.rng);
         addresses.truncate(nodes);
-        self.broadcast(addresses, data).await
+        self.broadcast(addresses, data, None, None).await
     }
 }
 
@@ -229,7 +242,7 @@ impl Connection {
                         },
                         _ => {
                             // Something has gone wrong (either the channel dropped or we failed to read from it).
-                            // Put the message back in the buffer, we will try to send it again.
+                            // Put the message backcasthe buffer, we will try to send it again.
                             pending_replies.push_front((data, handler));
                             break 'connection NetworkError::FailedToReceiveAck(self.address);
                         }

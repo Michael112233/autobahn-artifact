@@ -24,6 +24,7 @@ use core::panic;
 use std::borrow::BorrowMut;
 //use tokio::time::error::Elapsed;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -33,6 +34,7 @@ use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 use std::cmp::max;
 //use tokio::time::{sleep, Duration, Instant};
+use adversary::attack::attack;
 
 //use crate::messages_consensus::{QC, TC};
 #[cfg(test)]
@@ -289,15 +291,29 @@ impl Core {
         }
 
         // Broadcast the new header in a reliable manner.
-        let addresses = self
-            .committee
-            .others_primaries(&self.name)
-            .iter()
-            .map(|(_, x)| x.primary_to_primary)
-            .collect();
+        let others = self.committee.others_primaries(&self.name);
+        let addresses: Vec<SocketAddr> = others.iter().map(|(_, x)| x.primary_to_primary).collect();
+        
+        // Build address to node_id mapping and get current node_id
+        let mut address_to_node_id = HashMap::new();
+        let mut from_node_id = None;
+        for (idx, (name, _)) in self.committee.authorities.iter().enumerate() {
+            if *name == self.name {
+                from_node_id = Some(idx);
+            }
+            if let Ok(primary_addr) = self.committee.primary(name) {
+                address_to_node_id.insert(primary_addr.primary_to_primary, idx);
+            }
+        }
+        
         let bytes = bincode::serialize(&PrimaryMessage::Header(header.clone(), false))
             .expect("Failed to serialize our own header");
-        let handlers = self.network.broadcast(addresses, Bytes::from(bytes)).await;
+        let handlers = self.network.broadcast(
+            addresses, 
+            Bytes::from(bytes),
+            from_node_id,
+            Some(address_to_node_id)
+        ).await;
         self.cancel_handlers
             .entry(header.height)
             .or_insert_with(Vec::new)
@@ -925,14 +941,28 @@ impl Core {
         let consensus_req = ConsensusRequest::new(self.name, consensus_message, &mut self.signature_service).await;
 
         //send to all others
-        let addresses = self
-            .committee
-            .others_primaries(&self.name)
-            .iter()
-            .map(|(_, x)| x.primary_to_primary)
-            .collect();
+        let others = self.committee.others_primaries(&self.name);
+        let addresses: Vec<SocketAddr> = others.iter().map(|(_, x)| x.primary_to_primary).collect();
+        
+        // Build address to node_id mapping and get current node_id
+        let mut address_to_node_id = HashMap::new();
+        let mut from_node_id = None;
+        for (idx, (name, _)) in self.committee.authorities.iter().enumerate() {
+            if *name == self.name {
+                from_node_id = Some(idx);
+            }
+            if let Ok(primary_addr) = self.committee.primary(name) {
+                address_to_node_id.insert(primary_addr.primary_to_primary, idx);
+            }
+        }
+        
         let message = bincode::serialize(&PrimaryMessage::ConsensusRequest(consensus_req.clone())).expect("Failed to serialize timeout message");
-        let handlers = self.network.broadcast(addresses, Bytes::from(message)).await;
+        let handlers = self.network.broadcast(
+            addresses, 
+            Bytes::from(message),
+            from_node_id,
+            Some(address_to_node_id)
+        ).await;
 
         self.cancel_handlers
             .entry(self.current_header.height())
@@ -1753,16 +1783,30 @@ impl Core {
 
         // Broadcast the timeout message.
         debug!("Broadcasting Timeout: {:?}", timeout);
-        let addresses = self
-            .committee
-            .others_primaries(&self.name)
-            .iter()
-            .map(|(_, x)| x.primary_to_primary)
-            .collect();
+        let others = self.committee.others_primaries(&self.name);
+        let addresses: Vec<SocketAddr> = others.iter().map(|(_, x)| x.primary_to_primary).collect();
+        
+        // Build address to node_id mapping and get current node_id
+        let mut address_to_node_id = HashMap::new();
+        let mut from_node_id = None;
+        for (idx, (name, _)) in self.committee.authorities.iter().enumerate() {
+            if *name == self.name {
+                from_node_id = Some(idx);
+            }
+            if let Ok(primary_addr) = self.committee.primary(name) {
+                address_to_node_id.insert(primary_addr.primary_to_primary, idx);
+            }
+        }
+        
         let message = bincode::serialize(&PrimaryMessage::Timeout(timeout.clone()))
             .expect("Failed to serialize timeout message");
         let handlers = self.network
-            .broadcast(addresses, Bytes::from(message))
+            .broadcast(
+                addresses, 
+                Bytes::from(message),
+                from_node_id,
+                Some(address_to_node_id)
+            )
             .await;
 
         self.consensus_cancel_handlers
