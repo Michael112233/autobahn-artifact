@@ -176,6 +176,11 @@ impl Core {
         asynchrony_duration: u64,
     ) {
         tokio::spawn(async move {
+            let sender_address = committee
+                .primary(&name)
+                .expect("Our public key is not in the committee")
+                .primary_to_primary;
+            let committee_clone = committee.clone();
             Self {
                 name,
                 //current_header: Header::genesis(&committee),
@@ -200,7 +205,7 @@ impl Core {
                 last_voted: HashMap::with_capacity(2 * gc_depth as usize),
                 current_header: Header::default(),
                 votes_aggregator: VotesAggregator::new(),
-                network: ReliableSender::new(),
+                network: ReliableSender::new(committee_clone, sender_address),
                 cancel_handlers: HashMap::with_capacity(2 * gc_depth as usize),
                 consensus_cancel_handlers: HashMap::with_capacity(2 * gc_depth as usize),
                 already_proposed_slots: HashSet::new(),
@@ -310,9 +315,7 @@ impl Core {
             .expect("Failed to serialize our own header");
         let handlers = self.network.broadcast(
             addresses, 
-            Bytes::from(bytes),
-            from_node_id,
-            Some(address_to_node_id)
+            Bytes::from(bytes)
         ).await;
         self.cancel_handlers
             .entry(header.height)
@@ -959,9 +962,7 @@ impl Core {
         let message = bincode::serialize(&PrimaryMessage::ConsensusRequest(consensus_req.clone())).expect("Failed to serialize timeout message");
         let handlers = self.network.broadcast(
             addresses, 
-            Bytes::from(message),
-            from_node_id,
-            Some(address_to_node_id)
+            Bytes::from(message)
         ).await;
 
         self.cancel_handlers
@@ -1803,9 +1804,7 @@ impl Core {
         let handlers = self.network
             .broadcast(
                 addresses, 
-                Bytes::from(message),
-                from_node_id,
-                Some(address_to_node_id)
+                Bytes::from(message)
             )
             .await;
 

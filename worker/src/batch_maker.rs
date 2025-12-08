@@ -13,6 +13,7 @@ use log::debug;
 #[cfg(feature = "benchmark")]
 use log::info;
 use network::{ReliableSender, SimpleSender};
+use config::Committee;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use std::net::SocketAddr;
@@ -58,6 +59,8 @@ impl BatchMaker {
         //tx_message: Sender<QuorumWaiterMessage>, //sender channel to worker.QuorumWaiter
         tx_batch: Sender<Vec<u8>>,   // sender channel to worker.Processor
         workers_addresses: Vec<(PublicKey, SocketAddr)>,
+        committee: Committee,
+        sender_address: SocketAddr,
     ) {
         tokio::spawn(async move {
             Self {
@@ -69,7 +72,7 @@ impl BatchMaker {
                 workers_addresses,
                 current_batch: Batch::with_capacity(batch_size * 2),
                 current_batch_size: 0,
-                network: SimpleSender::new(),
+                network: SimpleSender::new(committee, sender_address),
             }
             .run()
             .await;

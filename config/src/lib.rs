@@ -58,6 +58,8 @@ pub trait Export: Serialize {
 pub type Stake = u32;
 pub type WorkerId = u32;
 
+pub const BASE_PORT: u16 = 3000;
+
 #[derive(Deserialize, Clone)]
 pub struct Parameters {
     /// The timeout delay of the consensus protocol.
@@ -329,16 +331,12 @@ impl Committee {
             .collect()
     }
 
-    pub fn address(&self, name: &PublicKey) -> Option<SocketAddr> {
-        self.authorities.get(name).map(|x| x.consensus.consensus_to_consensus)
-    }
-
-    pub fn broadcast_addresses(&self, myself: &PublicKey) -> Vec<(PublicKey, SocketAddr)> {
-        self.authorities
-            .iter()
-            .filter(|(name, _)| name != &myself)
-            .map(|(name, x)| (*name, x.consensus.consensus_to_consensus))
-            .collect()
+    pub fn address_to_index(&self, address: &SocketAddr) -> usize {
+        let primary_num = self.authorities.len();
+        let total_workers: usize = self.authorities.values().map(|x| x.workers.len()).sum();
+        let worker_num = total_workers / primary_num;
+        let port = address.port();
+        (port - BASE_PORT) as usize / (worker_num * 3 + 3)
     }
 }
 

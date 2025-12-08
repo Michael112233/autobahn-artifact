@@ -17,9 +17,9 @@ def local(ctx, debug=True):
         'nodes': [4],
         'workers': 1,
         'co-locate': True,
-        'rate': [40000],
+        'rate': [35000],
         'tx_size': 512,
-        'duration': 60,
+        'duration': 90,
         'runs': 1,
 
         # Unused
@@ -29,7 +29,7 @@ def local(ctx, debug=True):
         'partition_nodes': 1,
     }
     node_params = {
-        'timeout_delay': 5_000,  # ms
+        'timeout_delay': 1_900,  # ms
         'header_size': 1000,  # bytes
         'max_header_delay': 200,  # ms
         'gc_depth': 50,  # rounds
@@ -41,9 +41,9 @@ def local(ctx, debug=True):
         'use_parallel_proposals': True,
         'k': 4,
         'use_fast_path': True,
-        'fast_path_timeout': 5_000,
+        'fast_path_timeout': 1_900,
         'use_ride_share': False,
-        'car_timeout': 5_000,
+        'car_timeout': 1_900,
 
         'simulate_asynchrony': False,
         'asynchrony_start': 15_000, #ms

@@ -78,6 +78,11 @@ impl Worker {
         worker.handle_workers_messages(tx_primary);               //spawns async task that listens for network messages from other Workers
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
+        let sender_address = worker
+            .committee
+            .worker(&worker.name, &worker.id)
+            .expect("Our public key or worker id is not in the committee")
+            .worker_to_worker;
         PrimaryConnector::spawn(
             worker
                 .committee
@@ -85,6 +90,8 @@ impl Worker {
                 .expect("Our public key is not in the committee")
                 .worker_to_primary,                              //filter primary associated with current worker based on the committee config.
             rx_primary,                                          //receiver channel to connect to primary channel (i.e. how other listener functions can invoke to PrimaryConnector)
+            worker.committee.clone(),
+            sender_address,
         );
 
         // NOTE: This log entry is used to compute performance.
@@ -160,6 +167,11 @@ impl Worker {
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
+        let sender_address = self
+            .committee
+            .worker(&self.name, &self.id)
+            .expect("Our public key or worker id is not in the committee")
+            .worker_to_worker;
         BatchMaker::spawn(
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
@@ -172,6 +184,8 @@ impl Worker {
                 .iter()
                 .map(|(name, addresses)| (*name, addresses.worker_to_worker))
                 .collect(),
+            self.committee.clone(),
+            sender_address,
         );
 
         // // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
@@ -222,6 +236,7 @@ impl Worker {
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
         Helper::spawn(
+            self.name,
             self.id,
             self.committee.clone(),
             self.store.clone(),
@@ -259,10 +274,13 @@ struct TxReceiverHandler {
 impl MessageHandler for TxReceiverHandler {
     async fn dispatch(&self, _writer: &mut Writer, message: Bytes) -> Result<(), Box<dyn Error>> {
         // Send the transaction to the batch maker.
-        self.tx_batch_maker
-            .send(message.to_vec())
-            .await
-            .expect("Failed to send transaction");
+        if let Err(e) = self.tx_batch_maker.send(message.to_vec()).await {
+            warn!("Failed to send transaction to batch maker: {}", e);
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                format!("Channel closed: {}", e),
+            )));
+        }
 
         // Give the change to schedule other tasks.
         tokio::task::yield_now().await;
@@ -289,16 +307,18 @@ impl MessageHandler for WorkerReceiverHandler {
 
         // Deserialize and parse the message.
         match bincode::deserialize(&serialized) {
-            Ok(WorkerMessage::Batch(..)) => self     //If receive batch message from another worker. Store the batch, and process.
-                .tx_processor
-                .send(serialized.to_vec())
-                .await
-                .expect("Failed to send batch"),
-            Ok(WorkerMessage::BatchRequest(missing, requestor)) => self  //If receive message from another worker that is missing a batch. Reply if we have batch ourselves.
-                .tx_helper
-                .send((missing, requestor))
-                .await
-                .expect("Failed to send batch request"),
+            Ok(WorkerMessage::Batch(..)) => {
+                //If receive batch message from another worker. Store the batch, and process.
+                if let Err(e) = self.tx_processor.send(serialized.to_vec()).await {
+                    warn!("Failed to send batch to processor: {}", e);
+                }
+            },
+            Ok(WorkerMessage::BatchRequest(missing, requestor)) => {
+                //If receive message from another worker that is missing a batch. Reply if we have batch ourselves.
+                if let Err(e) = self.tx_helper.send((missing, requestor)).await {
+                    warn!("Failed to send batch request to helper: {}", e);
+                }
+            },
             Err(e) => warn!("Serialization error: {}", e),
         }
         Ok(())
@@ -322,11 +342,11 @@ impl MessageHandler for PrimaryReceiverHandler {
         // Deserialize the message and send it to the synchronizer.
         match bincode::deserialize(&serialized) {
             Err(e) => error!("Failed to deserialize primary message: {}", e),
-            Ok(message) => self             
-                .tx_synchronizer
-                .send(message)
-                .await
-                .expect("Failed to send transaction"),
+            Ok(message) => {
+                if let Err(e) = self.tx_synchronizer.send(message).await {
+                    error!("Failed to send message to synchronizer: {}", e);
+                }
+            },
         }
         Ok(())
     }

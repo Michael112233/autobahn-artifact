@@ -44,6 +44,11 @@ impl GarbageCollector {
             .map(|x| x.primary_to_worker)
             .collect();
 
+        let sender_address = committee
+            .primary(&name)
+            .expect("Our public key is not in the committee")
+            .primary_to_primary;
+        let committee_clone = committee.clone();
         tokio::spawn(async move {
             Self {
                 store,
@@ -51,7 +56,7 @@ impl GarbageCollector {
                 rx_consensus,
                 tx_loopback,
                 addresses,
-                network: SimpleSender::new(),
+                network: SimpleSender::new(committee_clone, sender_address),
             }
             .run()
             .await;

@@ -90,6 +90,11 @@ impl HeaderWaiter {
         tx_core: Sender<Header>,
         tx_consensus_loopback: Sender<(ConsensusMessage, Header)>,
     ) {
+        let sender_address = committee
+            .primary(&name)
+            .expect("Our public key is not in the committee")
+            .primary_to_primary;
+        let committee_clone = committee.clone();
         tokio::spawn(async move {
             Self {
                 name,
@@ -102,7 +107,7 @@ impl HeaderWaiter {
                 rx_synchronizer,
                 tx_core,
                 tx_consensus_loopback,
-                network: SimpleSender::new(),
+                network: SimpleSender::new(committee_clone, sender_address),
                 parent_requests: HashMap::new(),
                 header_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
