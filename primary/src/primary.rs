@@ -28,6 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use store::Store;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use adversary::{start_attack_scheduler, NETWORK_PARTITION};
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
@@ -90,6 +91,9 @@ impl Primary {
         rx_request_header_sync: Receiver<Digest>,
         tx_output: Sender<Header>,
     ) {
+        if NETWORK_PARTITION {
+            start_attack_scheduler();
+        }
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
         let (tx_parents, rx_parents) = channel(CHANNEL_CAPACITY);

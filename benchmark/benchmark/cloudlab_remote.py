@@ -665,8 +665,11 @@ class CloudLabBench:
             'source $HOME/.cargo/env || export PATH=$HOME/.cargo/bin:$PATH',
             'cargo build --release --features benchmark',
             # Create symlinks so ./node and ./benchmark_client work
-            # Remove any existing node directory or file first (node is also a crate directory)
-            f'rm -rf node benchmark_client 2>/dev/null ; {CommandMaker.alias_binaries("./target/release/")}'
+            # Only remove node if it's a directory (node is also a crate directory), preserve node binary
+            # If node is a regular file (binary), keep it; otherwise remove directory/symlink and create symlink
+            f'([ -d node ] && rm -rf node || ([ -L node ] && rm -f node || true)) ; rm -f benchmark_client 2>/dev/null ; '
+            f'([ -f node ] && echo "Preserving existing node binary" || ln -sf ./target/release/node node) ; '
+            f'ln -sf ./target/release/benchmark_client benchmark_client'
         ]
         
         # Modify attack.rs AFTER updating the code (so the file exists)
@@ -729,6 +732,8 @@ class CloudLabBench:
         # 3. node (if in current directory)
         import os
         current_dir = Path.cwd()
+        
+        # Build list of paths to check (both relative and absolute)
         node_paths = [
             '../target/release/node',  # From benchmark/ to project root
             './node',  # Symlink in benchmark/ directory
@@ -736,32 +741,46 @@ class CloudLabBench:
             str(Path(binary_path) / 'node')  # Using PathMaker path
         ]
         
+        # Also add absolute paths based on current directory
+        try:
+            abs_current = current_dir.resolve()
+            node_paths.extend([
+                str(abs_current / 'node'),
+                str(abs_current.parent / 'target' / 'release' / 'node'),
+            ])
+        except (OSError, ValueError):
+            pass
+        
         # Check if any path exists (using os.path for proper symlink resolution)
         node_exists = False
         for path_str in node_paths:
-            # First check if path exists at all (including broken symlinks)
-            if os.path.lexists(path_str):
-                # If it's a symlink, we need to resolve it relative to the symlink's directory
-                if os.path.islink(path_str):
-                    # Get the symlink's directory and resolve the target relative to it
-                    symlink_dir = os.path.dirname(os.path.abspath(path_str))
-                    target = os.readlink(path_str)
-                    # Resolve target relative to symlink directory
-                    if not os.path.isabs(target):
-                        resolved = os.path.normpath(os.path.join(symlink_dir, target))
-                    else:
-                        resolved = target
-                    if os.path.exists(resolved) and os.path.isfile(resolved):
+            try:
+                # Convert to absolute path for more reliable checking
+                if not os.path.isabs(path_str):
+                    abs_path = os.path.abspath(path_str)
+                else:
+                    abs_path = path_str
+                
+                # First check if path exists at all (including broken symlinks)
+                if os.path.lexists(abs_path):
+                    # If it's a symlink, we need to resolve it
+                    if os.path.islink(abs_path):
+                        # Resolve symlink to absolute path
+                        resolved = os.path.realpath(abs_path)
+                        if os.path.exists(resolved) and os.path.isfile(resolved):
+                            node_exists = True
+                            break
+                    # If it's a regular file, it exists
+                    elif os.path.isfile(abs_path):
                         node_exists = True
                         break
-                # If it's a regular file, it exists
-                elif os.path.isfile(path_str):
+                # Also check with exists() for non-symlink files
+                elif os.path.exists(abs_path) and os.path.isfile(abs_path):
                     node_exists = True
                     break
-            # Also check with exists() for non-symlink files
-            elif os.path.exists(path_str) and os.path.isfile(path_str):
-                node_exists = True
-                break
+            except (OSError, ValueError) as e:
+                # Skip paths that cause errors (e.g., permission issues)
+                continue
         
         if not node_exists:
             Print.info('Node binary not found locally, will generate keys on remote nodes...')

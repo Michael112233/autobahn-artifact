@@ -3,10 +3,19 @@ from fabric import task
 
 from benchmark.local import LocalBench
 from benchmark.logs import ParseError, LogParser
-from benchmark.utils import Print
+from benchmark.utils import Print, BenchError
 from benchmark.plot import Ploter, PlotError
 from benchmark.instance import InstanceManager
-from benchmark.remote import Bench, BenchError
+from benchmark.cloudlab_remote import CloudLabBench
+from benchmark.cloudlab_instance import CloudLabInstanceManager
+
+# Lazy import for AWS/GCP remote (requires google-cloud-compute)
+def _get_remote_bench():
+    try:
+        from benchmark.remote import Bench
+        return Bench
+    except ImportError as e:
+        raise BenchError('AWS/GCP remote requires google-cloud-compute package. Install with: pip install google-cloud-compute', e)
 
 
 @task
@@ -105,6 +114,7 @@ def info(ctx):
 def install(ctx):
     ''' Install the codebase on all machines '''
     try:
+        Bench = _get_remote_bench()
         Bench(ctx).install()
     except BenchError as e:
         Print.error(e)
@@ -151,6 +161,7 @@ def remote(ctx, debug=True):
         'asynchrony_duration': 3_000, #ms
     }
     try:
+        Bench = _get_remote_bench()
         Bench(ctx).run(bench_params, node_params, debug)
     except BenchError as e:
         Print.error(e)
@@ -177,6 +188,7 @@ def plot(ctx):
 def kill(ctx):
     ''' Stop execution on all machines '''
     try:
+        Bench = _get_remote_bench()
         Bench(ctx).kill()
     except BenchError as e:
         Print.error(e)
@@ -225,21 +237,38 @@ def cloudlab_remote(ctx, debug=False):
         'faults': 0,
         'nodes': [4],
         'workers': 1,
-        'collocate': True,
-        'rate': [920000],
+        'co-locate': True,
+        'rate': [240000],
         'tx_size': 512,
         'duration': 90,
         'runs': 1,
-        'trigger_attack': [True], 
+
+        # Unused
+        'simulate_partition': True,
+        'partition_start': 5,
+        'partition_duration': 5,
+        'partition_nodes': 1,
     }
     node_params = {
-        'header_size': 1_000,  # bytes
+        'timeout_delay': 5000,  # ms
+        'header_size': 1000,  # bytes
         'max_header_delay': 200,  # ms
         'gc_depth': 50,  # rounds
-        'sync_retry_delay': 10_000,  # ms
+        'sync_retry_delay': 5_000,  # ms
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
-        'max_batch_delay': 200  # ms
+        'max_batch_delay': 20,  # ms
+        'use_optimistic_tips': True,
+        'use_parallel_proposals': True,
+        'k': 4,
+        'use_fast_path': True,
+        'fast_path_timeout': 5_000,
+        'use_ride_share': False,
+        'car_timeout': 5_000,
+
+        'simulate_asynchrony': False,
+        'asynchrony_start': 15_000, #ms
+        'asynchrony_duration': 3_000, #ms
     }
     try:
         CloudLabBench(ctx).run(bench_params, node_params, debug)

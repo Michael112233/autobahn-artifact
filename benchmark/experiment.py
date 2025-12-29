@@ -187,7 +187,7 @@ def main():
     target_nodes = ['10.10.1.1', '10.10.1.2', '10.10.1.3', '10.10.1.4']
     
     # Rate values to test
-    rate_values = [400000, 440000, 480000, 520000]
+    rate_values = [20000, 40000, 60000, 80000, 100000, 120000, 140000]
     runs_per_rate = 3
     
     Print.heading('Experiment: Running cloudlab_remote on nodes 10.10.1.1-4')
@@ -229,18 +229,35 @@ def main():
             'tx_size': 512,
             'duration': 90,
             'runs': runs_per_rate,  # Each rate will run 3 times
-            # 'trigger_attack': [True],  # Uncomment to enable attack
+            'simulate_partition': False,  # Disable partition simulation for normal runs
+            'partition_start': 5,
+            'partition_duration': 5,
+            'partition_nodes': 1,
+            'trigger_attack': [False],  # Uncomment to enable attack
         }
         
         # Node parameters
         node_params = {
+            'timeout_delay': 5_000,  # ms
             'header_size': 1_000,  # bytes
             'max_header_delay': 200,  # ms
             'gc_depth': 50,  # rounds
             'sync_retry_delay': 10_000,  # ms
             'sync_retry_nodes': 3,  # number of nodes
             'batch_size': 500_000,  # bytes
-            'max_batch_delay': 200  # ms
+            'max_batch_delay': 200,  # ms
+            # Autobahn protocol config parameters
+            'use_optimistic_tips': True,
+            'use_parallel_proposals': True,
+            'k': 4,
+            'use_fast_path': True,
+            'fast_path_timeout': 5_000,
+            'use_ride_share': False,
+            'car_timeout': 5_000,
+            # Asynchrony simulation
+            'simulate_asynchrony': False,
+            'asynchrony_start': 15_000,  # ms
+            'asynchrony_duration': 3_000,  # ms
         }
         
         # Run the benchmark
