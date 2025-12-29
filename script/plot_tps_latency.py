@@ -10,7 +10,7 @@ def extract_e2e_tps_latency(summary_csv='script/tps_latency_summary.csv'):
     rate = []
     with open(summary_csv, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
-            for row in reader:
+        for row in reader:
             # Each run's TPS
             tps_keys = [k for k in row if k.startswith('E2E_TPS_Run')]
             lat_keys = [k for k in row if k.startswith('E2E_Lat_Run')]
@@ -56,13 +56,13 @@ if __name__ == '__main__':
             attack_data['rate'].append(r)
             attack_data['e2e_tps'].append(tps)
             attack_data['latency'].append(lat)
-    else:
+        else:
             non_attack_data['rate'].append(r)
             non_attack_data['e2e_tps'].append(tps)
             non_attack_data['latency'].append(lat)
     print("Attack data:", attack_data)
     print("Non-attack data:", non_attack_data)
-        
+
     # 绘制 tps-latency 图
     plt.figure(figsize=(8,6))
     plt.scatter(attack_data['e2e_tps'], attack_data['latency'], color='red', label='Attack', marker='x')

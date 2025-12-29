@@ -189,3 +189,113 @@ def logs(ctx):
         print(LogParser.process('./logs', faults='?').result())
     except ParseError as e:
         Print.error(BenchError('Failed to parse logs', e))
+
+# CloudLab tasks
+@task
+def cloudlab_info(ctx):
+    ''' Display connect information about all CloudLab nodes '''
+    try:
+        CloudLabInstanceManager.make().print_info()
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def cloudlab_test(ctx):
+    ''' Test SSH connections to all CloudLab nodes '''
+    try:
+        CloudLabBench(ctx).test_connections()
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def cloudlab_install(ctx):
+    ''' Install the codebase on all CloudLab nodes '''
+    try:
+        CloudLabBench(ctx).install()
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def cloudlab_remote(ctx, debug=False):
+    ''' Run benchmarks on CloudLab '''
+    bench_params = {
+        'faults': 0,
+        'nodes': [4],
+        'workers': 1,
+        'collocate': True,
+        'rate': [920000],
+        'tx_size': 512,
+        'duration': 90,
+        'runs': 1,
+        'trigger_attack': [True], 
+    }
+    node_params = {
+        'header_size': 1_000,  # bytes
+        'max_header_delay': 200,  # ms
+        'gc_depth': 50,  # rounds
+        'sync_retry_delay': 10_000,  # ms
+        'sync_retry_nodes': 3,  # number of nodes
+        'batch_size': 500_000,  # bytes
+        'max_batch_delay': 200  # ms
+    }
+    try:
+        CloudLabBench(ctx).run(bench_params, node_params, debug)
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def cloudlab_status(ctx):
+    ''' Check if benchmark processes are running on CloudLab nodes '''
+    try:
+        CloudLabBench(ctx).status()
+    except BenchError as e:
+        Print.error(e)
+
+@task
+def cloudlab_debug(ctx):
+    ''' Debug: Check tmux sessions and capture error messages from CloudLab nodes '''
+    try:
+        CloudLabBench(ctx).debug_sessions()
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def cloudlab_kill(ctx):
+    ''' Stop execution on all CloudLab nodes '''
+    try:
+        CloudLabBench(ctx).kill()
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def cloudlab_download_primary_logs(ctx, nodes='0,1,2,3'):
+    ''' Download primary logs from specified CloudLab nodes (default: 0,1,2,3) '''
+    import sys
+    import os
+    # Add benchmark directory to path
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    
+    from download_logs import download_primary_logs
+    
+    try:
+        # Parse node indices
+        node_indices = [int(x.strip()) for x in nodes.split(',')]
+        Print.info(f'Downloading primary logs from nodes: {node_indices}')
+        success = download_primary_logs('cloudlab_settings.json', node_indices)
+        if success:
+            Print.info('✓ Successfully downloaded primary logs')
+        else:
+            Print.error('✗ Failed to download some primary logs')
+        return success
+    except ValueError as e:
+        Print.error(f'Invalid node indices format: {nodes}. Use comma-separated numbers like "0,1,2,3"')
+        return False
+    except Exception as e:
+        Print.error(f'Failed to download primary logs: {e}')
+        return False
