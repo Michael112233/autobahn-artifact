@@ -187,8 +187,8 @@ def main():
     target_nodes = ['10.10.1.1', '10.10.1.2', '10.10.1.3', '10.10.1.4']
     
     # Rate values to test
-    rate_values = [40000, 80000, 120000, 160000, 200000, 240000, 280000, 320000, 360000, 400000, 440000, 480000]
-    runs_per_rate = 3
+    rate_values = [80000, 160000, 240000, 320000, 400000, 480000]
+    runs_per_rate = 5
     
     Print.heading('Experiment: Running cloudlab_remote on nodes 10.10.1.1-4')
     Print.info(f'Target nodes: {", ".join(target_nodes)}')
@@ -227,7 +227,7 @@ def main():
             'collocate': True,
             'rate': rate_values,  # Multiple rate values to test
             'tx_size': 512,
-            'duration': 90,
+            'duration': 120,
             'runs': runs_per_rate,  # Each rate will run 3 times
             'simulate_partition': False,  # Disable partition simulation for normal runs
             'partition_start': 5,
