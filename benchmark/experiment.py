@@ -187,7 +187,7 @@ def main():
     target_nodes = ['10.10.1.1', '10.10.1.2', '10.10.1.3', '10.10.1.4']
     
     # Rate values to test
-    rate_values = [20000, 40000, 60000, 80000, 100000, 120000, 140000]
+    rate_values = [40000, 80000, 120000, 160000, 200000, 240000, 280000, 320000, 360000, 400000, 440000, 480000]
     runs_per_rate = 3
     
     Print.heading('Experiment: Running cloudlab_remote on nodes 10.10.1.1-4')

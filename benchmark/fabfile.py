@@ -26,9 +26,9 @@ def local(ctx, debug=True):
         'nodes': [4],
         'workers': 1,
         'co-locate': True,
-        'rate': [35000],
+        'rate': [220000],
         'tx_size': 512,
-        'duration': 90,
+        'duration': 60,
         'runs': 1,
 
         # Unused
