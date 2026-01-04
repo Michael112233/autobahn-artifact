@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
+use adversary::attack::{start_attack_scheduler, NETWORK_PARTITION};
+
 
 #[cfg(test)]
 #[path = "tests/worker_tests.rs"]
@@ -62,6 +64,10 @@ impl Worker {
         parameters: Parameters,
         store: Store,
     ) {
+        if NETWORK_PARTITION {
+            start_attack_scheduler();
+        }
+
         // Define a worker instance.
         let worker = Self {
             name,
